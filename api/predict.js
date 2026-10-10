@@ -13,6 +13,7 @@ function validateInput(body) {
     expenses: parseNumber(source.expenses),
     payroll: parseNumber(source.payroll),
     employees: parseNumber(source.employees),
+    invoiceReadiness: ['ready', 'in-progress', 'not-ready'].includes(source.invoiceReadiness) ? source.invoiceReadiness : 'not-ready',
   };
   const errors = {};
 

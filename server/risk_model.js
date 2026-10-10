@@ -4,14 +4,17 @@
  * Replace `predictRisk` with the Google AI Studio model integration when it is
  * available. Keep its return shape stable so the API and dashboard continue
  * to work without changes. This rule-based version is an illustrative
- * operating-resilience proxy; it does not encode confirmed Budget 2027 policy.
+ * operating-resilience proxy. Its Budget 2027 lens uses transparent policy and
+ * macroeconomic scenario inputs defined separately in budget_2027_policy.js.
  */
+
+import { buildBudget2027Scenario } from './budget_2027_policy.js';
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const roundCurrency = (value) => Math.round(value * 100) / 100;
 const percent = (value) => `${(value * 100).toFixed(1)}%`;
 
-export function predictRisk({ revenue, expenses, payroll, employees }) {
+export function predictRisk({ revenue, expenses, payroll, employees, invoiceReadiness = 'not-ready' }) {
   const totalCosts = expenses + payroll;
   const monthlySurplus = revenue - totalCosts;
   const payrollRatio = payroll / revenue;
@@ -30,6 +33,8 @@ export function predictRisk({ revenue, expenses, payroll, employees }) {
 
   if (employees >= 50 && payrollRatio > 0.35) score += 8;
   if (totalCosts / revenue > 0.95) score += 15;
+  if (invoiceReadiness === 'not-ready') score += 7;
+  else if (invoiceReadiness === 'in-progress') score += 3;
   score = clamp(Math.round(score), 1, 100);
 
   const riskLevel = score >= 65 ? 'High' : score >= 30 ? 'Elevated' : 'Low';
@@ -69,7 +74,13 @@ export function predictRisk({ revenue, expenses, payroll, employees }) {
     ? `Monthly costs exceed sales by ${percent(Math.abs(operatingMargin))} of revenue.`
     : `After expenses and payroll, the business keeps an estimated ${percent(operatingMargin)} of monthly sales.`;
   const payrollText = `Payroll uses ${percent(payrollRatio)} of monthly sales across ${employees} employees.`;
-  const explanation = `${pressureText} ${payrollText} This demo score does not include specific Budget 2027 measures.`;
+  const readinessText = invoiceReadiness === 'ready'
+    ? 'e-Invoice readiness is marked prepared.'
+    : invoiceReadiness === 'in-progress'
+      ? 'e-Invoice setup is still in progress.'
+      : 'e-Invoice readiness has not started, adding a compliance planning signal.';
+  const budget2027 = buildBudget2027Scenario({ expenses, invoiceReadiness });
+  const explanation = `${pressureText} ${payrollText} ${readinessText}`;
 
   return {
     riskLevel,
@@ -90,6 +101,7 @@ export function predictRisk({ revenue, expenses, payroll, employees }) {
       payrollRatio,
       operatingMargin,
     },
-    modelSource: 'demo-rules',
+    budget2027,
+    modelSource: 'rules-budget-2027-v1',
   };
 }

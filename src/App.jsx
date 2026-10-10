@@ -24,9 +24,10 @@ const SAMPLE_DATA = {
   expenses: '62000',
   payroll: '49200',
   employees: '12',
+  invoiceReadiness: 'in-progress',
 };
 
-const EMPTY_FORM = { revenue: '', expenses: '', payroll: '', employees: '' };
+const EMPTY_FORM = { revenue: '', expenses: '', payroll: '', employees: '', invoiceReadiness: 'not-ready' };
 
 const DATE_LABEL = new Intl.DateTimeFormat('en-MY', {
   timeZone: 'Asia/Kuala_Lumpur',
@@ -107,6 +108,20 @@ function EmployeeField({ value, onChange, error, inputRef }) {
         <span className="field-unit">people</span>
       </div>
       {error ? <p className="field-error" id="employees-error">{error}</p> : <p className="field-hint" id="employees-hint">Full-time and part-time staff</p>}
+    </div>
+  );
+}
+
+function PolicyReadinessField({ value, onChange }) {
+  return (
+    <div className="policy-field">
+      <label className="field-label" htmlFor="invoiceReadiness">e-Invoice readiness</label>
+      <select id="invoiceReadiness" name="invoiceReadiness" value={value} onChange={onChange}>
+        <option value="not-ready">Not started</option>
+        <option value="in-progress">In progress</option>
+        <option value="ready">Ready</option>
+      </select>
+      <p className="field-hint">Used for the Budget 2027 policy lens</p>
     </div>
   );
 }
@@ -202,6 +217,39 @@ function RiskResult({ prediction, actionOpen, onToggleAction }) {
         </div>
       </div>
 
+      <section className="budget-lens" aria-labelledby="budget-lens-title">
+        <div className="budget-lens-heading">
+          <div>
+            <div className="section-kicker"><span className="section-marker" /> BUDGET 2027 POLICY LENS</div>
+            <h4 id="budget-lens-title">Potential impact to plan for</h4>
+          </div>
+          <span className="policy-source-label">SUPPLIED SOURCES</span>
+        </div>
+        <div className="policy-metrics">
+          <div className="policy-metric-card">
+            <span>2027 cost sensitivity</span>
+            <strong>RM {formatRM(prediction.budget2027.costSensitivity.low)}–{formatRM(prediction.budget2027.costSensitivity.high)}</strong>
+            <small>Per month after a full year</small>
+          </div>
+          <div className="policy-metric-card">
+            <span>{prediction.budget2027.macroBenchmark.label}</span>
+            <strong>{prediction.budget2027.macroBenchmark.value}</strong>
+            <small>Market context, not sales forecast</small>
+          </div>
+        </div>
+        <p className="policy-explainer">{prediction.budget2027.costSensitivity.description}</p>
+        <div className="policy-signal-list">
+          {prediction.budget2027.policySignals.map((signal) => (
+            <article className={`policy-signal policy-signal-${signal.tone}`} key={signal.title}>
+              <div className="policy-signal-topline"><span className="policy-signal-dot" /><span>{signal.label}</span></div>
+              <strong>{signal.title}</strong>
+              <p>{signal.description}</p>
+            </article>
+          ))}
+        </div>
+        <p className="policy-source-note">{prediction.budget2027.sourceLabel}. Values are illustrative planning scenarios, not official policy costs or eligibility decisions.</p>
+      </section>
+
       <div className="action-wrap">
         <button className="action-button" type="button" onClick={onToggleAction} aria-expanded={actionOpen} aria-controls="action-plan">
           <span className="action-button-icon"><FileCheck2 size={16} aria-hidden="true" /></span>
@@ -229,12 +277,21 @@ function App() {
   const [isSample, setIsSample] = useState(false);
   const refs = useRef({});
 
-  const filledCount = useMemo(() => Object.values(form).filter((value) => value !== '').length, [form]);
+  const filledCount = useMemo(() => ['revenue', 'expenses', 'payroll', 'employees'].filter((name) => form[name] !== '').length, [form]);
 
   const updateField = (name) => (event) => {
     const nextValue = event.target.value.replace(/[^\d.,]/g, '');
     setForm((current) => ({ ...current, [name]: nextValue }));
     if (fieldErrors[name]) setFieldErrors((current) => ({ ...current, [name]: undefined }));
+    setRequestError('');
+    setIsSample(false);
+    setPrediction(null);
+    setStatus('idle');
+    setActionOpen(false);
+  };
+
+  const updateSelect = (name) => (event) => {
+    setForm((current) => ({ ...current, [name]: event.target.value }));
     setRequestError('');
     setIsSample(false);
     setPrediction(null);
@@ -276,6 +333,7 @@ function App() {
           expenses: parseAmount(form.expenses),
           payroll: parseAmount(form.payroll),
           employees: Number(form.employees),
+          invoiceReadiness: form.invoiceReadiness,
         }),
       });
       const data = await response.json();
@@ -402,6 +460,8 @@ function App() {
                 />
               </fieldset>
 
+              <PolicyReadinessField value={form.invoiceReadiness} onChange={updateSelect('invoiceReadiness')} />
+
               {requestError ? (
                 <div className="request-error" role="alert">
                   <BadgeAlert size={17} aria-hidden="true" />
@@ -451,13 +511,13 @@ function App() {
         <section className="assurance-bar" aria-label="Scenario model information">
           <div className="assurance-brand"><span className="assurance-mark"><ShieldCheck size={15} aria-hidden="true" /></span><span>Built for <strong>Malaysian SMEs</strong></span></div>
           <span className="assurance-divider" />
-          <p>This demo uses an illustrative operating-resilience model. Policy-specific insights will be added with the Google AI Studio model.</p>
+          <p>Includes a transparent Budget 2027 policy lens: e-Invoice readiness, MSME support pathways and a supplied macro cost range.</p>
           <a className="method-link" href="#model-note">How it works <ArrowUpRight size={13} aria-hidden="true" /></a>
         </section>
 
         <section className="below-fold" id="model-note" aria-label="Model notes">
           <div className="model-note-icon"><CircleHelp size={16} aria-hidden="true" /></div>
-          <div><strong>About this scenario</strong><p>Risk scores and monthly impact are illustrative demo estimates based on the figures entered. They are not official Budget 2027 projections or financial advice.</p></div>
+          <div><strong>About this scenario</strong><p>Risk scores use the figures entered plus an e-Invoice readiness signal. The policy lens uses the supplied Budget 2027 documents; it is an illustrative scenario, not an official policy cost, eligibility decision or financial advice.</p></div>
         </section>
 
         <footer className="page-footer"><span>© {new Date().getFullYear()} Nadi SME Intelligence</span><span><span className="footer-dot" />Scenario engine online</span><span>Made for Malaysia <span className="footer-heart">·</span> RM-first</span></footer>
