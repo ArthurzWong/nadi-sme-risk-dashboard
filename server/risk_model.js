@@ -14,7 +14,16 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const roundCurrency = (value) => Math.round(value * 100) / 100;
 const percent = (value) => `${(value * 100).toFixed(1)}%`;
 
-export function predictRisk({ revenue, expenses, payroll, employees, invoiceReadiness = 'not-ready' }) {
+export function predictRisk({
+  revenue,
+  expenses,
+  payroll,
+  employees,
+  cashBalance = 0,
+  currentLiabilities = 0,
+  invoiceReadiness = 'not-ready',
+  includeBudget2027 = false,
+}) {
   const totalCosts = expenses + payroll;
   const monthlySurplus = revenue - totalCosts;
   const payrollRatio = payroll / revenue;
@@ -33,8 +42,14 @@ export function predictRisk({ revenue, expenses, payroll, employees, invoiceRead
 
   if (employees >= 50 && payrollRatio > 0.35) score += 8;
   if (totalCosts / revenue > 0.95) score += 15;
-  if (invoiceReadiness === 'not-ready') score += 7;
-  else if (invoiceReadiness === 'in-progress') score += 3;
+  const cashRunwayMonths = cashBalance > 0 && totalCosts > 0 ? cashBalance / totalCosts : null;
+  const liabilitiesRatio = currentLiabilities > 0 ? currentLiabilities / revenue : 0;
+  if (cashRunwayMonths !== null && cashRunwayMonths < 1) score += 16;
+  else if (cashRunwayMonths !== null && cashRunwayMonths < 2) score += 8;
+  if (liabilitiesRatio > 1) score += 12;
+  else if (liabilitiesRatio > 0.65) score += 6;
+  if (includeBudget2027 && invoiceReadiness === 'not-ready') score += 7;
+  else if (includeBudget2027 && invoiceReadiness === 'in-progress') score += 3;
   score = clamp(Math.round(score), 1, 100);
 
   const riskLevel = score >= 65 ? 'High' : score >= 30 ? 'Elevated' : 'Low';
@@ -52,6 +67,7 @@ export function predictRisk({ revenue, expenses, payroll, employees, invoiceRead
   // Scenario proxy: a share of monthly turnover scaled by the model score.
   // The UI labels this estimate as illustrative rather than a forecast.
   const financialImpactRM = roundCurrency(revenue * (0.012 + score / 1000));
+  const cashflowGapRM = roundCurrency(Math.max(0, -monthlySurplus));
   const actions = riskLevel === 'High'
     ? [
         'Build a 13-week cash forecast and review it every Friday.',
@@ -74,13 +90,33 @@ export function predictRisk({ revenue, expenses, payroll, employees, invoiceRead
     ? `Monthly costs exceed sales by ${percent(Math.abs(operatingMargin))} of revenue.`
     : `After expenses and payroll, the business keeps an estimated ${percent(operatingMargin)} of monthly sales.`;
   const payrollText = `Payroll uses ${percent(payrollRatio)} of monthly sales across ${employees} employees.`;
-  const readinessText = invoiceReadiness === 'ready'
+  const readinessText = !includeBudget2027
+    ? 'Budget 2027 policy impact is not included in this run.'
+    : invoiceReadiness === 'ready'
     ? 'e-Invoice readiness is marked prepared.'
     : invoiceReadiness === 'in-progress'
       ? 'e-Invoice setup is still in progress.'
       : 'e-Invoice readiness has not started, adding a compliance planning signal.';
-  const budget2027 = buildBudget2027Scenario({ expenses, invoiceReadiness });
+  const budget2027 = includeBudget2027 ? buildBudget2027Scenario({ expenses, invoiceReadiness }) : null;
   const explanation = `${pressureText} ${payrollText} ${readinessText}`;
+  const sixMonthPlan = riskLevel === 'High'
+    ? [
+        { timing: 'Weeks 1–2', action: 'Protect cash', detail: 'Prepare a 13-week cash forecast, pause non-essential spend and call overdue customers.' },
+        { timing: 'Month 1', action: 'Close the immediate gap', detail: 'Renegotiate supplier terms and set a weekly collections target.' },
+        { timing: 'Months 2–3', action: 'Repair margin', detail: 'Reprice low-margin work and set a payroll-to-sales ceiling.' },
+        { timing: 'Months 4–6', action: 'Build resilience', detail: 'Hold two months of core costs in cash and review financing options.' },
+      ]
+    : riskLevel === 'Elevated'
+      ? [
+          { timing: 'Month 1', action: 'Measure cash weekly', detail: 'Set a 13-week forecast and track actual cash against it.' },
+          { timing: 'Months 2–3', action: 'Strengthen margin', detail: 'Renegotiate two large costs and adjust pricing where needed.' },
+          { timing: 'Months 4–6', action: 'Create a reserve', detail: 'Transfer part of monthly surplus into a dedicated cash buffer.' },
+        ]
+      : [
+          { timing: 'Month 1', action: 'Set guardrails', detail: 'Confirm a cash-buffer target and payroll ceiling.' },
+          { timing: 'Months 2–3', action: 'Review growth quality', detail: 'Prioritise customers and products with stable cash conversion.' },
+          { timing: 'Months 4–6', action: 'Prepare for change', detail: 'Refresh this scenario with actual statements and policy updates.' },
+        ];
 
   return {
     riskLevel,
@@ -95,13 +131,18 @@ export function predictRisk({ revenue, expenses, payroll, employees, invoiceRead
       { label: 'Monthly buffer', value: percent(operatingMargin), tone: operatingMargin < 0.08 ? 'critical' : operatingMargin < 0.15 ? 'watch' : 'healthy' },
       { label: 'Payroll share', value: percent(payrollRatio), tone: payrollRatio > 0.5 ? 'critical' : payrollRatio > 0.4 ? 'watch' : 'healthy' },
       { label: 'Left after costs', value: `RM ${Math.round(monthlySurplus).toLocaleString('en-MY')}`, tone: monthlySurplus < 0 ? 'critical' : monthlySurplus < revenue * 0.08 ? 'watch' : 'healthy' },
+      { label: 'Cash runway', value: cashRunwayMonths === null ? 'Not provided' : `${cashRunwayMonths.toFixed(1)} months`, tone: cashRunwayMonths === null ? 'watch' : cashRunwayMonths < 1 ? 'critical' : cashRunwayMonths < 2 ? 'watch' : 'healthy' },
     ],
     metrics: {
       monthlySurplusRM: roundCurrency(monthlySurplus),
       payrollRatio,
       operatingMargin,
+      cashRunwayMonths,
+      currentLiabilitiesRatio: liabilitiesRatio,
+      cashflowGapRM,
     },
     budget2027,
+    sixMonthPlan,
     modelSource: 'rules-budget-2027-v1',
   };
 }

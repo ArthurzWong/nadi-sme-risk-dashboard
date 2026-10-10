@@ -12,9 +12,11 @@ import {
   Coins,
   FileCheck2,
   LoaderCircle,
+  FileText,
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  Upload,
   UsersRound,
   WalletCards,
 } from 'lucide-react';
@@ -25,9 +27,11 @@ const SAMPLE_DATA = {
   payroll: '49200',
   employees: '12',
   invoiceReadiness: 'in-progress',
+  cashBalance: '185000',
+  currentLiabilities: '72000',
 };
 
-const EMPTY_FORM = { revenue: '', expenses: '', payroll: '', employees: '', invoiceReadiness: 'not-ready' };
+const EMPTY_FORM = { revenue: '', expenses: '', payroll: '', employees: '', cashBalance: '', currentLiabilities: '', invoiceReadiness: 'not-ready', includeBudget2027: false };
 
 const DATE_LABEL = new Intl.DateTimeFormat('en-MY', {
   timeZone: 'Asia/Kuala_Lumpur',
@@ -126,6 +130,37 @@ function PolicyReadinessField({ value, onChange }) {
   );
 }
 
+function OptionalMoneyField({ id, label, value, onChange, hint }) {
+  return (
+    <div className="field-wrap">
+      <label className="field-label" htmlFor={id}>{label}<span className="optional-mark">Optional</span></label>
+      <div className="field-control">
+        <span className="currency-prefix" aria-hidden="true">RM</span>
+        <input id={id} name={id} type="text" inputMode="decimal" autoComplete="off" spellCheck="false" placeholder="0.00" value={value} onChange={onChange} />
+      </div>
+      <p className="field-hint">{hint}</p>
+    </div>
+  );
+}
+
+function DocumentUpload({ state, onFileChange, period, onPeriodChange }) {
+  return (
+    <section className="document-upload" aria-labelledby="document-upload-title">
+      <div className="document-upload-heading">
+        <div className="panel-icon panel-icon-green"><Upload size={17} aria-hidden="true" /></div>
+        <div><div className="panel-kicker">OPTIONAL <span className="kicker-line" /></div><h3 id="document-upload-title">Load financial statements</h3></div>
+      </div>
+      <p>Upload an Annual Report, Profit &amp; Loss, or Balance Sheet. Key lines are extracted into the scenario and can be edited before you run it.</p>
+      <div className="upload-controls">
+        <label className="upload-button" htmlFor="financial-document"><FileText size={15} aria-hidden="true" /><span>{state.status === 'loading' ? 'Extracting…' : 'Choose statement'}</span></label>
+        <input id="financial-document" className="visually-hidden" type="file" accept=".pdf,.csv,.xlsx,.xls,.txt,application/pdf,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/plain" onChange={onFileChange} disabled={state.status === 'loading'} />
+        <label className="period-select-label" htmlFor="document-period">Figures are <select id="document-period" value={period} onChange={onPeriodChange}><option value="annual">annual</option><option value="monthly">monthly</option></select></label>
+      </div>
+      <p className={`upload-status ${state.status === 'error' ? 'upload-error' : ''}`} aria-live="polite">{state.message || 'PDF, CSV, XLSX, XLS or TXT · maximum 3 MB · files are not stored.'}</p>
+    </section>
+  );
+}
+
 function EmptyResult({ onSample }) {
   return (
     <div className="empty-result" aria-live="polite">
@@ -193,11 +228,16 @@ function RiskResult({ prediction, actionOpen, onToggleAction }) {
       <div className="impact-panel">
         <div className="impact-topline">
           <div className="impact-icon"><Banknote size={17} aria-hidden="true" /></div>
-          <span>ESTIMATED MONTHLY IMPACT</span>
+          <span>ESTIMATED ECONOMIC IMPACT</span>
           <CircleHelp size={15} aria-label="Illustrative scenario estimate, not an official policy projection" title="Illustrative scenario estimate, not an official policy projection" />
         </div>
         <div className="impact-number"><span className="impact-rm">RM</span>{monthlyImpact}</div>
         <div className="impact-footnote"><span>Illustrative exposure proxy</span><span className="impact-period"><Clock3 size={13} aria-hidden="true" /> Monthly</span></div>
+      </div>
+
+      <div className="cashflow-grid" aria-label="Cash flow implications">
+        <div className="cashflow-card"><span>MONTHLY CASH GAP</span><strong>RM {formatRM(prediction.metrics.cashflowGapRM)}</strong><small>{prediction.metrics.cashflowGapRM > 0 ? 'Immediate gap to close' : 'No modelled operating gap'}</small></div>
+        <div className="cashflow-card"><span>CASH RUNWAY</span><strong>{prediction.metrics.cashRunwayMonths === null ? 'Add balance sheet' : `${prediction.metrics.cashRunwayMonths.toFixed(1)} mo.`}</strong><small>{prediction.metrics.cashRunwayMonths === null ? 'Upload or enter cash balance' : 'At current monthly cost base'}</small></div>
       </div>
 
       <div className="explanation-block">
@@ -217,7 +257,7 @@ function RiskResult({ prediction, actionOpen, onToggleAction }) {
         </div>
       </div>
 
-      <section className="budget-lens" aria-labelledby="budget-lens-title">
+      {prediction.budget2027 ? <section className="budget-lens" aria-labelledby="budget-lens-title">
         <div className="budget-lens-heading">
           <div>
             <div className="section-kicker"><span className="section-marker" /> BUDGET 2027 POLICY LENS</div>
@@ -248,6 +288,14 @@ function RiskResult({ prediction, actionOpen, onToggleAction }) {
           ))}
         </div>
         <p className="policy-source-note">{prediction.budget2027.sourceLabel}. Values are illustrative planning scenarios, not official policy costs or eligibility decisions.</p>
+      </section> : null}
+
+      <section className="six-month-plan" aria-labelledby="six-month-plan-title">
+        <div className="section-kicker"><span className="section-marker" /> NEXT SIX MONTHS</div>
+        <h4 id="six-month-plan-title">Your rectification plan</h4>
+        <ol>
+          {prediction.sixMonthPlan.map((step) => <li key={step.timing}><span>{step.timing}</span><div><strong>{step.action}</strong><p>{step.detail}</p></div></li>)}
+        </ol>
       </section>
 
       <div className="action-wrap">
@@ -275,6 +323,9 @@ function App() {
   const [requestError, setRequestError] = useState('');
   const [actionOpen, setActionOpen] = useState(false);
   const [isSample, setIsSample] = useState(false);
+  const [includeBudget2027, setIncludeBudget2027] = useState(false);
+  const [documentPeriod, setDocumentPeriod] = useState('annual');
+  const [uploadState, setUploadState] = useState({ status: 'idle', message: '' });
   const refs = useRef({});
 
   const filledCount = useMemo(() => ['revenue', 'expenses', 'payroll', 'employees'].filter((name) => form[name] !== '').length, [form]);
@@ -299,6 +350,44 @@ function App() {
     setActionOpen(false);
   };
 
+  const handleDocument = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (file.size > 3 * 1024 * 1024) {
+      setUploadState({ status: 'error', message: 'Choose a file smaller than 3 MB.' });
+      return;
+    }
+    setUploadState({ status: 'loading', message: `Reading ${file.name}…` });
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('The file could not be read.'));
+        reader.onload = () => resolve(String(reader.result).split(',').pop());
+        reader.readAsDataURL(file);
+      });
+      const response = await fetch('/api/extract-financials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: file.name, contentBase64: base64 }) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'We could not extract figures from that file.');
+      const divisor = documentPeriod === 'annual' ? 12 : 1;
+      const extracted = data.values || {};
+      setForm((current) => ({
+        ...current,
+        revenue: extracted.revenue ? String(Math.round(extracted.revenue / divisor)) : current.revenue,
+        expenses: extracted.expenses ? String(Math.round(extracted.expenses / divisor)) : current.expenses,
+        payroll: extracted.payroll ? String(Math.round(extracted.payroll / divisor)) : current.payroll,
+        employees: extracted.employees ? String(extracted.employees) : current.employees,
+        cashBalance: extracted.cashBalance ? String(Math.round(extracted.cashBalance)) : current.cashBalance,
+        currentLiabilities: extracted.currentLiabilities ? String(Math.round(extracted.currentLiabilities)) : current.currentLiabilities,
+      }));
+      const names = data.detectedLines.join(', ');
+      setUploadState({ status: 'success', message: `Loaded ${names}. Review the populated fields before running the model.` });
+    } catch (error) {
+      setUploadState({ status: 'error', message: error.message || 'We could not extract figures from that file.' });
+    } finally {
+      event.target.value = '';
+    }
+  };
+
   const prefillSample = () => {
     setForm(SAMPLE_DATA);
     setFieldErrors({});
@@ -307,6 +396,7 @@ function App() {
     setStatus('idle');
     setActionOpen(false);
     setIsSample(true);
+    setIncludeBudget2027(true);
     document.getElementById('revenue')?.focus();
   };
 
@@ -333,7 +423,10 @@ function App() {
           expenses: parseAmount(form.expenses),
           payroll: parseAmount(form.payroll),
           employees: Number(form.employees),
+          cashBalance: form.cashBalance ? parseAmount(form.cashBalance) : 0,
+          currentLiabilities: form.currentLiabilities ? parseAmount(form.currentLiabilities) : 0,
           invoiceReadiness: form.invoiceReadiness,
+          includeBudget2027,
         }),
       });
       const data = await response.json();
@@ -361,6 +454,7 @@ function App() {
     setFieldErrors({});
     setRequestError('');
     setIsSample(false);
+    setIncludeBudget2027(false);
     setActionOpen(false);
     document.getElementById('revenue')?.focus();
   };
@@ -460,6 +554,14 @@ function App() {
                 />
               </fieldset>
 
+              <DocumentUpload state={uploadState} onFileChange={handleDocument} period={documentPeriod} onPeriodChange={(event) => setDocumentPeriod(event.target.value)} />
+
+              <fieldset className="form-fieldset balance-sheet-fields">
+                <legend className="visually-hidden">Optional balance sheet inputs</legend>
+                <OptionalMoneyField id="cashBalance" label="Cash and bank balance" value={form.cashBalance} onChange={updateField('cashBalance')} hint="Used to estimate cash runway" />
+                <OptionalMoneyField id="currentLiabilities" label="Current liabilities" value={form.currentLiabilities} onChange={updateField('currentLiabilities')} hint="Short-term obligations due within a year" />
+              </fieldset>
+
               <PolicyReadinessField value={form.invoiceReadiness} onChange={updateSelect('invoiceReadiness')} />
 
               {requestError ? (
@@ -480,6 +582,9 @@ function App() {
                   <RefreshCw size={14} aria-hidden="true" /> Prefill sample
                 </button>
               </div>
+              <button className={`budget-toggle ${includeBudget2027 ? 'is-active' : ''}`} type="button" onClick={() => { setIncludeBudget2027((active) => !active); setPrediction(null); setStatus('idle'); }} aria-pressed={includeBudget2027}>
+                <span className="budget-toggle-indicator" aria-hidden="true" /> {includeBudget2027 ? 'Budget 2027 impact included' : 'Include Budget 2027 impact'}
+              </button>
               {isSample ? <p className="sample-note"><span className="sample-note-dot" /> Sample SME figures loaded. Edit any value before you run.</p> : null}
               {prediction ? <button className="reset-link" type="button" onClick={clearForm}>Clear figures <ArrowDownRight size={13} aria-hidden="true" /></button> : null}
             </form>
@@ -511,7 +616,7 @@ function App() {
         <section className="assurance-bar" aria-label="Scenario model information">
           <div className="assurance-brand"><span className="assurance-mark"><ShieldCheck size={15} aria-hidden="true" /></span><span>Built for <strong>Malaysian SMEs</strong></span></div>
           <span className="assurance-divider" />
-          <p>Includes a transparent Budget 2027 policy lens: e-Invoice readiness, MSME support pathways and a supplied macro cost range.</p>
+          <p>Upload key financial statements or enter figures manually. Turn on Budget 2027 to include its policy lens in the score.</p>
           <a className="method-link" href="#model-note">How it works <ArrowUpRight size={13} aria-hidden="true" /></a>
         </section>
 

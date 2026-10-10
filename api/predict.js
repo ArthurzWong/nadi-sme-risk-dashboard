@@ -13,7 +13,10 @@ function validateInput(body) {
     expenses: parseNumber(source.expenses),
     payroll: parseNumber(source.payroll),
     employees: parseNumber(source.employees),
+    cashBalance: parseNumber(source.cashBalance) || 0,
+    currentLiabilities: parseNumber(source.currentLiabilities) || 0,
     invoiceReadiness: ['ready', 'in-progress', 'not-ready'].includes(source.invoiceReadiness) ? source.invoiceReadiness : 'not-ready',
+    includeBudget2027: source.includeBudget2027 === true,
   };
   const errors = {};
 

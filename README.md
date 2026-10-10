@@ -37,6 +37,12 @@ The Node server serves the built dashboard and API from port `3001`.
 
 Operating expenses should exclude payroll. The sample button uses the values above.
 
+## Statement upload
+
+`POST /api/extract-financials` accepts a base64-encoded PDF, CSV, XLSX, XLS, or text file up to 3 MB. It extracts common statement lines such as revenue, operating expenses, payroll, cash and bank balances, current liabilities, and employee count. The dashboard uses an annual/monthly selector to convert annual P&L figures into monthly scenario inputs. Uploaded content is processed for the response and is not stored by the app.
+
+Cash and current liabilities are optional inputs that improve the cash-runway and short-term-obligation signals. The six-month plan is derived from the resulting risk level; it is an illustrative planning guide.
+
 ## Google AI Studio integration
 
 Replace `predictRisk` in [`server/risk_model.js`](server/risk_model.js) with the supplied Google AI Studio model logic. Keep the result fields consumed by `src/App.jsx` (`riskLevel`, `riskCategory`, `priorityScore`, `financialImpactRM`, `explanation`, `recommendedAction`, `actionSteps`, `drivers`, and `metrics`) or update the API response and UI together. Add any required API key to an environment variable on the server; do not place secrets in the React app.
