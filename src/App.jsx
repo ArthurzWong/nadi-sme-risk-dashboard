@@ -176,7 +176,7 @@ function CompanyLookup({ query, onQueryChange, companies, selectedSymbol, onSele
         <option value="">{companies.length ? 'Select a Bursa Malaysia company' : 'Type at least 2 characters to search'}</option>
         {companies.map((company) => <option key={company.symbol} value={company.symbol}>{company.name} · {company.symbol}</option>)}
       </select>
-      <p className={`company-status ${state.status === 'error' ? 'upload-error' : ''}`} aria-live="polite">{state.message || 'Annual revenue and operating costs are converted to monthly figures. Payroll is only filled when disclosed.'}</p>
+      <p className={`company-status ${state.status === 'error' ? 'upload-error' : ''}`} aria-live="polite">{state.message || 'Annual-report payroll and employee disclosures are loaded automatically, then converted to monthly payroll where applicable.'}</p>
     </section>
   );
 }

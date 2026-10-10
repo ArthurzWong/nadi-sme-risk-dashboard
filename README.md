@@ -45,7 +45,7 @@ Cash and current liabilities are optional inputs that improve the cash-runway an
 
 ## Bursa Malaysia company lookup
 
-The company selector searches current `.KL` equity results as the user types, then retrieves public annual financial data and averages the latest available annual observations. Revenue and operating expenses are converted to monthly scenario inputs; cash and current liabilities remain balance-sheet figures. Payroll and employee count are only prefilled when publicly disclosed, so the dashboard preserves existing values when those fields are unavailable.
+The company selector searches current `.KL` equity results as the user types, then retrieves public annual financial data and averages the latest available annual observations. It first checks Bursa Malaysia annual-report filings for staff/employee-benefit expense and employee-count disclosures, then uses public market data as a fallback for headcount. Revenue, operating expenses and payroll are converted to monthly scenario inputs; cash and current liabilities remain balance-sheet figures. Existing values are preserved only if a company does not disclose a particular line.
 
 For Google discovery of annual-report PDFs, configure these server-side Vercel environment variables:
 

@@ -29,6 +29,17 @@ function findFinancialValue(lines, patterns) {
   return null;
 }
 
+function findEmployeeCount(lines) {
+  for (const line of lines) {
+    if (!/\b(?:employees?|workforce|staff)\b/i.test(line)) continue;
+    const nearby = line.match(/(?:employees?|workforce|staff)[^\d]{0,24}(\d[ \d,]*)|(\d[ \d,]*)\s+(?:employees?|staff|workers?)/i);
+    if (!nearby) continue;
+    const count = cleanAmount((nearby[1] || nearby[2]).replaceAll('\u202f', ''));
+    if (count !== null && count > 0 && count < 1_000_000 && !(count >= 1900 && count <= 2100)) return Math.round(count);
+  }
+  return findFinancialValue(lines, [/\bnumber of employees\b/i, /\btotal employees\b/i, /\btotal workforce\b/i, /\bworkforce of\b/i]);
+}
+
 export function extractFinancialValues(text) {
   const lines = text
     .split(/\r?\n/)
@@ -38,24 +49,23 @@ export function extractFinancialValues(text) {
   const values = {
     revenue: findFinancialValue(lines, [/\brevenue\b/i, /\bturnover\b/i, /\btotal sales\b/i, /^sales\b/i]),
     expenses: findFinancialValue(lines, [/\boperating expenses?\b/i, /\badministrative expenses?\b/i, /\bother operating expenses?\b/i, /\btotal expenses?\b/i]),
-    payroll: findFinancialValue(lines, [/\bstaff costs?\b/i, /\bemployee benefits?\b/i, /\bpersonnel expenses?\b/i, /\bsalar(?:y|ies) and wages?\b/i, /\bwages? and salaries?\b/i]),
+    payroll: findFinancialValue(lines, [/\bstaff costs?\b/i, /\bstaff expenses?\b/i, /\bstaff[- ]related expenses?\b/i, /\bemployee benefits?(?: expenses?)?\b/i, /\bpersonnel (?:costs?|expenses?)\b/i, /\bsalar(?:y|ies) and wages?\b/i, /\bwages? and salaries?\b/i]),
     cashBalance: findFinancialValue(lines, [/\bcash and bank balances?\b/i, /\bcash and cash equivalents?\b/i, /^cash at bank\b/i]),
     currentLiabilities: findFinancialValue(lines, [/\btotal current liabilities\b/i, /^current liabilities\b/i]),
-    employees: findFinancialValue(lines, [/\bnumber of employees\b/i, /\btotal employees\b/i, /\bemployees\b/i]),
+    employees: findEmployeeCount(lines),
   };
 
   if (values.employees !== null) values.employees = Math.round(values.employees);
   return Object.fromEntries(Object.entries(values).filter(([, value]) => value !== null));
 }
 
-export async function extractDocument({ fileName, contentBase64 }) {
+export async function extractFinancialBuffer({ fileName, buffer, maxBytes = 3 * 1024 * 1024 }) {
   const extension = fileName.split('.').pop()?.toLowerCase();
   if (!extension || !SUPPORTED_EXTENSIONS.has(extension)) {
     throw new Error('Upload a PDF, CSV, Excel, or text financial statement.');
   }
-  const buffer = Buffer.from(contentBase64, 'base64');
-  if (!buffer.length || buffer.length > 3 * 1024 * 1024) {
-    throw new Error('Use a file up to 3 MB.');
+  if (!buffer.length || buffer.length > maxBytes) {
+    throw new Error(`Use a file up to ${Math.round(maxBytes / 1024 / 1024)} MB.`);
   }
 
   let text = '';
@@ -76,4 +86,11 @@ export async function extractDocument({ fileName, contentBase64 }) {
     throw new Error('No standard financial lines were found. Try a text-based statement or enter figures manually.');
   }
   return { values, detectedLines: Object.keys(values), source: extension.toUpperCase() };
+}
+
+export async function extractDocument({ fileName, contentBase64 }) {
+  return extractFinancialBuffer({
+    fileName,
+    buffer: Buffer.from(contentBase64, 'base64'),
+  });
 }
