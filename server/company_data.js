@@ -77,7 +77,13 @@ async function getBursaAnnualReport(symbol) {
     if (!annualPdf) return { values: {}, sourceLinks: [detailUrl] };
     const pdfResponse = await fetch(annualPdf.href);
     if (!pdfResponse.ok) return { values: {}, sourceLinks: [detailUrl, annualPdf.href] };
-    const report = await extractFinancialBuffer({ fileName: annualPdf.href, buffer: Buffer.from(await pdfResponse.arrayBuffer()), maxBytes: 25 * 1024 * 1024 });
+    // Bursa's document-download URLs use query parameters rather than a .pdf
+    // filename, so provide a stable filename for the document type check.
+    const report = await extractFinancialBuffer({
+      fileName: `${symbol}-annual-report.pdf`,
+      buffer: Buffer.from(await pdfResponse.arrayBuffer()),
+      maxBytes: 25 * 1024 * 1024
+    });
     return { values: report.values, sourceLinks: [detailUrl, annualPdf.href] };
   } catch {
     return { values: {}, sourceLinks: [] };
