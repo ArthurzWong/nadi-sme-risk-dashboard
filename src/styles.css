@@ -141,6 +141,17 @@ a { color: inherit; }
 .policy-field select { width: 100%; min-height: 42px; padding: 0 10px; border: 1px solid #3a4b3f; border-radius: 6px; outline: none; color: var(--text); background: #101811; font-size: 12px; }
 .policy-field select:focus-visible { border-color: #83c98f; box-shadow: 0 0 0 2px #0a0e0c, 0 0 0 4px #a5e7ae; }
 .policy-field .field-hint { min-height: 0; }
+.company-lookup { margin-top: 19px; padding: 14px; border: 1px solid #3b5142; border-radius: 8px; background: linear-gradient(145deg, rgba(18, 33, 22, 0.72), rgba(13, 21, 16, 0.5)); }
+.company-lookup-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.company-lookup h3 { margin: 3px 0 0; color: var(--text); font-size: 14px; letter-spacing: -0.25px; }
+.company-source { padding: 4px 6px; border: 1px solid #40554a; border-radius: 4px; color: var(--green); background: rgba(130, 217, 148, 0.07); font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; }
+.company-lookup > p { margin: 11px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.company-search, .company-options { width: 100%; min-height: 42px; margin-top: 10px; padding: 0 11px; border: 1px solid #3a4b3f; border-radius: 6px; outline: none; color: var(--text); background: #101811; font-size: 12px; }
+.company-search::placeholder { color: #66736a; }
+.company-search:focus-visible, .company-options:focus-visible { border-color: #83c98f; box-shadow: 0 0 0 2px #0a0e0c, 0 0 0 4px #a5e7ae; }
+.company-options { margin-top: 7px; }
+.company-options:disabled { opacity: 0.64; cursor: not-allowed; }
+.company-status { min-height: 16px; color: var(--text-muted) !important; font-size: 11px !important; }
 .document-upload { margin-top: 19px; padding: 14px; border: 1px dashed #3b5142; border-radius: 8px; background: rgba(13, 22, 16, 0.5); }
 .document-upload-heading { display: flex; align-items: center; gap: 10px; }
 .document-upload .panel-icon { width: 34px; height: 34px; border-radius: 8px; }

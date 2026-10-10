@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowDownRight,
   ArrowRight,
@@ -157,6 +157,26 @@ function DocumentUpload({ state, onFileChange, period, onPeriodChange }) {
         <label className="period-select-label" htmlFor="document-period">Figures are <select id="document-period" value={period} onChange={onPeriodChange}><option value="annual">annual</option><option value="monthly">monthly</option></select></label>
       </div>
       <p className={`upload-status ${state.status === 'error' ? 'upload-error' : ''}`} aria-live="polite">{state.message || 'PDF, CSV, XLSX, XLS or TXT · maximum 3 MB · files are not stored.'}</p>
+    </section>
+  );
+}
+
+function CompanyLookup({ query, onQueryChange, companies, selectedSymbol, onSelect, state }) {
+  return (
+    <section className="company-lookup" aria-labelledby="company-lookup-title">
+      <div className="company-lookup-heading">
+        <div><div className="panel-kicker">OPTIONAL <span className="kicker-line" /></div><h3 id="company-lookup-title">Load a Bursa Malaysia company</h3></div>
+        <span className="company-source">PUBLIC FILINGS</span>
+      </div>
+      <p>Search a listed company by name or ticker. Select it to load average annual public figures into the monthly scenario fields.</p>
+      <label className="visually-hidden" htmlFor="company-query">Search Bursa Malaysia company</label>
+      <input id="company-query" className="company-search" type="search" value={query} onChange={onQueryChange} placeholder="e.g. Maybank or 1155" autoComplete="off" />
+      <label className="visually-hidden" htmlFor="company-options">Matching Bursa Malaysia companies</label>
+      <select id="company-options" className="company-options" value={selectedSymbol} onChange={onSelect} disabled={!companies.length || state.status === 'loading'}>
+        <option value="">{companies.length ? 'Select a Bursa Malaysia company' : 'Type at least 2 characters to search'}</option>
+        {companies.map((company) => <option key={company.symbol} value={company.symbol}>{company.name} · {company.symbol}</option>)}
+      </select>
+      <p className={`company-status ${state.status === 'error' ? 'upload-error' : ''}`} aria-live="polite">{state.message || 'Annual revenue and operating costs are converted to monthly figures. Payroll is only filled when disclosed.'}</p>
     </section>
   );
 }
@@ -326,6 +346,10 @@ function App() {
   const [includeBudget2027, setIncludeBudget2027] = useState(false);
   const [documentPeriod, setDocumentPeriod] = useState('annual');
   const [uploadState, setUploadState] = useState({ status: 'idle', message: '' });
+  const [companyQuery, setCompanyQuery] = useState('');
+  const [companyOptions, setCompanyOptions] = useState([]);
+  const [selectedCompany, setSelectedCompany] = useState('');
+  const [companyState, setCompanyState] = useState({ status: 'idle', message: '' });
   const refs = useRef({});
 
   const filledCount = useMemo(() => ['revenue', 'expenses', 'payroll', 'employees'].filter((name) => form[name] !== '').length, [form]);
@@ -348,6 +372,57 @@ function App() {
     setPrediction(null);
     setStatus('idle');
     setActionOpen(false);
+  };
+
+  useEffect(() => {
+    const query = companyQuery.trim();
+    if (query.length < 2) {
+      setCompanyOptions([]);
+      return undefined;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/company-search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Company search is unavailable.');
+        setCompanyOptions(data.companies || []);
+        setCompanyState((current) => current.status === 'loading' ? current : { status: 'idle', message: '' });
+      } catch (error) {
+        if (error.name !== 'AbortError') setCompanyState({ status: 'error', message: error.message || 'Company search is unavailable.' });
+      }
+    }, 300);
+    return () => { controller.abort(); window.clearTimeout(timeout); };
+  }, [companyQuery]);
+
+  const selectCompany = async (event) => {
+    const symbol = event.target.value;
+    setSelectedCompany(symbol);
+    if (!symbol) return;
+    const company = companyOptions.find((option) => option.symbol === symbol);
+    if (!company) return;
+    setCompanyState({ status: 'loading', message: `Finding public financials for ${company.name}…` });
+    try {
+      const response = await fetch('/api/company-financials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(company) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'We could not retrieve public financials.');
+      const annual = data.annualValues || {};
+      setForm((current) => ({
+        ...current,
+        revenue: annual.revenue ? String(Math.round(annual.revenue / 12)) : current.revenue,
+        expenses: annual.expenses ? String(Math.round(annual.expenses / 12)) : current.expenses,
+        payroll: annual.payroll ? String(Math.round(annual.payroll / 12)) : current.payroll,
+        employees: annual.employees ? String(Math.round(annual.employees)) : current.employees,
+        cashBalance: annual.cashBalance ? String(Math.round(annual.cashBalance)) : current.cashBalance,
+        currentLiabilities: annual.currentLiabilities ? String(Math.round(annual.currentLiabilities)) : current.currentLiabilities,
+      }));
+      const loaded = Object.keys(annual).join(', ');
+      setCompanyState({ status: 'success', message: `Loaded ${loaded || 'available financial lines'} from ${data.source}. Review all values before running the model.` });
+      setPrediction(null);
+      setStatus('idle');
+    } catch (error) {
+      setCompanyState({ status: 'error', message: error.message || 'We could not retrieve public financials.' });
+    }
   };
 
   const handleDocument = async (event) => {
@@ -553,6 +628,15 @@ function App() {
                   inputRef={(node) => { refs.current.employees = node; }}
                 />
               </fieldset>
+
+              <CompanyLookup
+                query={companyQuery}
+                onQueryChange={(event) => { setCompanyQuery(event.target.value); setSelectedCompany(''); }}
+                companies={companyOptions}
+                selectedSymbol={selectedCompany}
+                onSelect={selectCompany}
+                state={companyState}
+              />
 
               <DocumentUpload state={uploadState} onFileChange={handleDocument} period={documentPeriod} onPeriodChange={(event) => setDocumentPeriod(event.target.value)} />
 

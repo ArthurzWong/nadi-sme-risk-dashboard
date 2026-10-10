@@ -43,6 +43,19 @@ Operating expenses should exclude payroll. The sample button uses the values abo
 
 Cash and current liabilities are optional inputs that improve the cash-runway and short-term-obligation signals. The six-month plan is derived from the resulting risk level; it is an illustrative planning guide.
 
+## Bursa Malaysia company lookup
+
+The company selector searches current `.KL` equity results as the user types, then retrieves public annual financial data and averages the latest available annual observations. Revenue and operating expenses are converted to monthly scenario inputs; cash and current liabilities remain balance-sheet figures. Payroll and employee count are only prefilled when publicly disclosed, so the dashboard preserves existing values when those fields are unavailable.
+
+For Google discovery of annual-report PDFs, configure these server-side Vercel environment variables:
+
+```sh
+GOOGLE_SEARCH_API_KEY=...
+GOOGLE_SEARCH_ENGINE_ID=...
+```
+
+Without these variables, the lookup still uses public market-data financials. Review every fetched value before running the model: data may be delayed, reported in different accounting formats, or unavailable for a particular issuer.
+
 ## Google AI Studio integration
 
 Replace `predictRisk` in [`server/risk_model.js`](server/risk_model.js) with the supplied Google AI Studio model logic. Keep the result fields consumed by `src/App.jsx` (`riskLevel`, `riskCategory`, `priorityScore`, `financialImpactRM`, `explanation`, `recommendedAction`, `actionSteps`, `drivers`, and `metrics`) or update the API response and UI together. Add any required API key to an environment variable on the server; do not place secrets in the React app.
